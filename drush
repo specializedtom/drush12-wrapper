@@ -1,0 +1,86 @@
+#!/usr/bin/env sh
+
+#
+# DRUSH WRAPPER
+#
+# A wrapper script which launches the Drush that is in your project's /vendor
+# directory.  Copy it to the root of your project and edit as desired.
+# You may rename this script to 'drush', if doing so does not cause a conflict
+# (e.g. with a folder __ROOT__/drush).
+#
+# Below are options which you might want to add. More info at
+# `drush topic core-global-options`:
+#
+# --local       Only discover commandfiles/site aliases/config that are
+#               inside your project dir.
+# --alias-path  A list of directories where Drush will search for site
+#               alias files.
+# --config      A list of paths to config files
+# --include     A list of directories to search for commandfiles.
+#
+# Note that it is recommended to use --local when using a drush
+# wrapper script.
+#
+# See the 'drush' script in the Drush installation root (../drush) for
+# an explanation of the different 'drush' scripts.
+#
+# IMPORTANT:  Modify the path below if your 'vendor' directory has been
+# relocated to another location in your composer.json file.
+# `../vendor/bin/drush.launcher --local $@` is a common variant for
+# composer-managed Drupal sites.
+#
+
+trim() { read -r readline; echo "$readline"; }
+
+input="$HOME/.drush/drush.yml"
+drushcmd=""
+
+while IFS= read -r line
+do
+  trimline=$(echo "$line" | trim)
+  if grep -q "/drush/sites" <<< "$trimline"; then
+     trimline=$(awk '{print substr($0,3)}' <<< "$trimline")
+     projectdir="${trimline:0:${#trimline}-12}"
+     if grep -q "$projectdir" <<< "$PWD"; then
+        search_dir="$projectdir/drush/sites"
+        aliasfile=""
+        alias=""
+        for entry in "$search_dir"/*.yml
+        do
+           aliasfile="${entry:${#search_dir}+1}"
+           fullaliasfile="$search_dir/$aliasfile"
+           if [[ ! $entry =~ "self" ]]; then
+              alias="${aliasfile:0:${#aliasfile}-8}"
+           fi
+           count=0
+           while read -r line
+           do
+              areadline=$(echo "$line" | trim)
+              if [[ $count = 0 ]]; then
+                 alias="$alias$areadline"
+                 alias="${alias:0:${#alias}-1}"
+              else
+                 haystack="$areadline"
+                 needle=":"
+                 rest=${haystack#*$needle}
+                 key="${haystack:0:$(( ${#haystack} - ${#rest} - ${#needle} )) }"
+                 value="${haystack:$(( ${#haystack} - ${#rest} - ${#needle} + 2 )) }"
+                 case $key in
+                    root)
+                       drushcmd="$drushcmd--root=$value "
+                       ;;
+                    uri)
+                       drushcmd="$drushcmd--uri=$value "
+                       ;;
+                 esac
+              fi
+              count=$(( $count+1 ))
+           done <"$fullaliasfile"
+        done
+        break
+     fi
+  fi
+done <"$input"
+
+drushcmd="$projectdir/vendor/bin/drush --alias-path=$search_dir $drushcmd $@"
+eval "$drushcmd";
