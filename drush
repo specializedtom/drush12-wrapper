@@ -82,5 +82,5 @@ do
   fi
 done <"$input"
 
-drushcmd="$projectdir/vendor/bin/drush --alias-path=$search_dir $drushcmd $@"
-eval "$drushcmd";
+# FIX: Use exec instead of eval to avoid shell parsing issues
+exec "$projectdir/vendor/bin/drush" --alias-path="$search_dir" $drushcmd "$@"
